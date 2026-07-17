@@ -185,7 +185,7 @@ def _frame(records: list[dict], required_column: str) -> pd.DataFrame:
 
 
 def get_market_data(weeks: int = DEFAULT_WEEKS) -> dict:
-    """Return a best-effort V2 dataset built from official TWSE/TPEx APIs."""
+    """Return a best-effort V3 dataset built from official TWSE/TPEx APIs."""
     if not 8 <= weeks <= 52:
         raise ValueError("weeks must be between 8 and 52")
 
