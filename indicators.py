@@ -15,12 +15,12 @@ def risk_level(score: float) -> str:
     if score < 20:
         return "🟢 低風險"
     if score < 40:
-        return "🟩 偏低風險"
+        return "🟡 留意"
     if score < 60:
-        return "🟡 中等風險"
+        return "🟠 偏高"
     if score < 80:
-        return "🟠 偏高風險"
-    return "🔴 極高風險"
+        return "🔴 高風險"
+    return "⚫ 極高風險"
 
 
 def _scale(series: pd.Series, low: float, high: float, points: float) -> pd.Series:
@@ -28,73 +28,31 @@ def _scale(series: pd.Series, low: float, high: float, points: float) -> pd.Seri
     return ((series - low) / (high - low) * points).clip(0, points).fillna(0)
 
 
-def _weekly_index_risk(
-    frame: pd.DataFrame,
-    value_column: str,
-    volume_column: str,
-    label: str,
-) -> pd.DataFrame:
-    source = frame[["date", value_column, volume_column]].dropna().sort_values("date").copy()
-    source["daily_volume_ratio"] = source[volume_column] / source[volume_column].shift(1).rolling(
-        20, min_periods=5
-    ).mean()
+def _weekly_index_risk(frame: pd.DataFrame, value_column: str, label: str) -> pd.DataFrame:
+    source = frame[["date", value_column]].dropna().sort_values("date").copy()
     source["week_end"] = source["date"].map(
         lambda value: value + dt.timedelta(days=(4 - value.weekday()) % 7)
     )
-    weekly_price = (
-        source.groupby("week_end", as_index=False).tail(1)
-        .drop(columns=["date", volume_column])
-        .rename(columns={"week_end": "date", value_column: "raw_value"})
-    )
-    # Compare average daily volume so holidays and an unfinished current week do
-    # not look artificially quiet merely because they contain fewer sessions.
-    weekly_volume = source.groupby("week_end", as_index=False)[volume_column].mean()
     weekly = (
-        weekly_price.merge(weekly_volume, left_on="date", right_on="week_end", how="left")
-        .drop(columns="week_end")
-        .rename(columns={volume_column: "weekly_volume"})
+        source.groupby("week_end", as_index=False).tail(1)
+        .drop(columns="date")
+        .rename(columns={"week_end": "date", value_column: "raw_value"})
         .set_index("date")
     )
     price = weekly["raw_value"]
-    volume = weekly["weekly_volume"]
     weekly_return = price.pct_change()
-    weekly["ma30"] = price.rolling(30, min_periods=8).mean()
-    weekly["ma5"] = price.rolling(5, min_periods=3).mean()
-    weekly["ma30_divergence"] = price / weekly["ma30"] - 1
-    weekly["weekly_return"] = weekly_return
-    prior_volume_average = volume.shift(1).rolling(10, min_periods=4).mean()
-    weekly["weekly_volume_ratio"] = (volume / prior_volume_average).replace(
-        [float("inf"), float("-inf")], pd.NA
-    )
-    # Use the stronger of the whole-week and latest-session signals so a sudden
-    # one-day selloff is not diluted by quieter sessions earlier in the week.
-    weekly["volume_ratio"] = weekly[["weekly_volume_ratio", "daily_volume_ratio"]].max(
-        axis=1, skipna=True
-    )
+    moving_average = price.rolling(20, min_periods=4).mean()
+    stretch = price / moving_average - 1
+    momentum_12w = price.pct_change(12)
+    annualized_volatility = weekly_return.rolling(4, min_periods=2).std() * (52**0.5)
 
-    overheat = _scale(weekly["ma30_divergence"], 0.03, 0.20, 25)
-    breakdown = _scale(-weekly["ma30_divergence"], 0.00, 0.12, 25)
-    volume_adjusted_loss = (-weekly_return).clip(lower=0) * weekly["volume_ratio"].fillna(1)
-    sell_pressure = _scale(volume_adjusted_loss, 0.01, 0.10, 35)
-    weak_rally = weekly_return.clip(lower=0) * (1 - weekly["volume_ratio"]).clip(lower=0)
-    divergence = _scale(weak_rally, 0.005, 0.04, 15)
-    base_risk = overheat + breakdown + sell_pressure + divergence
-
-    # The fast five-week line is deliberately activated only in a high-risk
-    # regime. Falling below it adds aftershock risk; reclaiming it grants relief.
-    high_risk = (base_risk >= 60) | (sell_pressure >= 20)
-    below_ma5 = _scale((weekly["ma5"] - price) / weekly["ma5"], 0, 0.08, 25)
-    above_ma5 = _scale((price - weekly["ma5"]) / weekly["ma5"], 0, 0.05, 10)
-    weekly["risk"] = (base_risk + below_ma5.where(high_risk, 0) - above_ma5.where(high_risk, 0)).clip(0, 100)
-    weekly["five_week_trigger"] = high_risk
-    weekly["volume_signal"] = [
-        "量增下跌" if change < 0 and ratio >= 1.1
-        else "量縮上漲" if change > 0 and ratio < 0.9
-        else "量縮下跌" if change < 0 and ratio < 0.9
-        else "量價齊揚" if change > 0 and ratio >= 1.1
-        else "量價中性"
-        for change, ratio in zip(weekly_return.fillna(0), weekly["volume_ratio"].fillna(1))
-    ]
+    # Price extension and momentum fall after a washout, while volatility keeps
+    # aftershock risk elevated. This measures remaining risk, not today's pain.
+    weekly["risk"] = (
+        _scale(stretch, -0.05, 0.15, 40)
+        + _scale(momentum_12w, -0.05, 0.20, 30)
+        + _scale(annualized_volatility, 0.10, 0.45, 30)
+    ).clip(0, 100)
     weekly["series"] = label
     return weekly.reset_index()
 
@@ -140,10 +98,10 @@ def build_risk_river(
     if taiex.empty:
         raise ValueError("taiex data is required")
 
-    listed = _weekly_index_risk(taiex, "taiex", "taiex_volume", "上市風險")
+    listed = _weekly_index_risk(taiex, "taiex", "上市風險")
     frames = [listed]
     if not tpex.empty:
-        frames.append(_weekly_index_risk(tpex, "tpex", "tpex_volume", "上櫃風險"))
+        frames.append(_weekly_index_risk(tpex, "tpex", "上櫃風險"))
     if not margin.empty:
         frames.append(_margin_risk(margin, listed))
 
