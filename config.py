@@ -10,4 +10,4 @@ REQUEST_HEADERS = {
 
 TWSE_INDEX_URL = "https://www.twse.com.tw/rwd/zh/afterTrading/FMTQIK"
 TWSE_MARGIN_URL = "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN"
-TPEX_INDEX_URL = "https://www.tpex.org.tw/www/zh-tw/indexInfo/inx"
+TPEX_INDEX_URL = "https://www.tpex.org.tw/www/zh-tw/afterTrading/tradingIndex"

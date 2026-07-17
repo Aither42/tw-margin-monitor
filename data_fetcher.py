@@ -83,6 +83,7 @@ def _fetch_twse_month(month: dt.date) -> list[dict]:
                     "date": _roc_date(row[0]),
                     "taiex": _number(row[4]),
                     "taiex_change": _number(row[5]),
+                    "taiex_volume": _number(row[1]),
                 }
             )
         except (IndexError, TypeError, ValueError):
@@ -101,9 +102,10 @@ def _fetch_tpex_month(month: dt.date) -> list[dict]:
         try:
             records.append(
                 {
-                    "date": pd.Timestamp(row[0]),
+                    "date": _roc_date(row[0]),
                     "tpex": _number(row[4]),
                     "tpex_change": _number(row[5]),
+                    "tpex_volume": _number(row[1]),
                 }
             )
         except (IndexError, TypeError, ValueError):
@@ -185,7 +187,7 @@ def _frame(records: list[dict], required_column: str) -> pd.DataFrame:
 
 
 def get_market_data(weeks: int = DEFAULT_WEEKS) -> dict:
-    """Return a best-effort V3 dataset built from official TWSE/TPEx APIs."""
+    """Return a best-effort V4 dataset built from official TWSE/TPEx APIs."""
     if not 8 <= weeks <= 52:
         raise ValueError("weeks must be between 8 and 52")
 
