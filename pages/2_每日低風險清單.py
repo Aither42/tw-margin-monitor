@@ -19,6 +19,13 @@ from gaga_scanner import (
 APP_DIR = Path(__file__).resolve().parents[1]
 
 st.title("📋 每日軋軋低風險清單")
+
+st.page_link(
+    "app.py",
+    label="🐾 回到「軋軋個股分析」",
+    use_container_width=True,
+)
+
 st.caption(
     "兩階段掃描：先用 Yahoo Finance 做技術初篩，再只對候選股跑完整 V4.10 "
     "低風險區模型（MA13 / 40 / 63 / 150 / 1000＋估值＋月營收）。"
@@ -30,42 +37,18 @@ st.info(
 )
 
 with st.sidebar:
-    st.subheader("每日掃描設定")
+    st.subheader("資料設定")
     token = st.text_input(
         "FinMind Token（選填）",
         type="password",
         key="finmind_token",
     )
-    markets = st.multiselect(
-        "市場",
-        ["上市", "上櫃"],
-        default=["上市", "上櫃"],
-    )
-    max_choice = st.selectbox(
-        "最多掃描檔數",
-        ["100（快速測試）", "300（建議先用）", "600", "全部"],
-        index=1,
-    )
-    confirm_n = st.slider(
-        "第二階段完整確認檔數",
-        min_value=10,
-        max_value=60,
-        value=25,
-        step=5,
-        help="FinMind 月營收大致會對每一檔完整確認股送出 1 次 request。",
-    )
-    industry_filter = st.selectbox(
-        "產業",
-        ["全部產業"],
-        index=0,
-        disabled=True,
-        help="載入股票清單後，主畫面可再選產業。",
-    )
+    st.caption("掃描條件已移到主畫面，不用打開側邊欄找。")
 
 # Show latest saved result before running a new scan.
 saved_date, saved_low = latest_saved_low_risk(APP_DIR)
 if saved_date:
-    st.subheader(f"最近一次已儲存清單｜行情日 {saved_date}")
+    st.subheader(f"📌 最近一次已儲存結果｜行情日 {saved_date}")
     if saved_low.empty:
         st.caption("最近一次完整確認結果中，沒有股票落在低風險承接區。")
     else:
@@ -92,11 +75,34 @@ if saved_date:
 
 st.markdown("---")
 
+st.subheader("🔎 今日掃描條件")
+st.caption("這些就是每日篩選選項；全部放在主畫面，手機也直接看得到。")
+
 try:
     universe = load_taiwan_stock_universe(token)
+    universe_error = None
 except Exception as e:
-    st.error(f"無法取得台股清單：{e}")
+    universe = pd.DataFrame()
+    universe_error = str(e)
+
+if universe_error:
+    st.error(f"目前無法取得台股股票池：{universe_error}")
+    st.caption("請稍後重試，或在側邊欄填入 FinMind Token。")
     st.stop()
+
+market_col, scale_col = st.columns(2)
+with market_col:
+    markets = st.multiselect(
+        "市場",
+        ["上市", "上櫃"],
+        default=["上市", "上櫃"],
+    )
+with scale_col:
+    max_choice = st.selectbox(
+        "第一階段掃描規模",
+        ["100（快速測試）", "300（建議先用）", "600", "全部"],
+        index=1,
+    )
 
 if markets:
     universe = universe[universe["market"].isin(markets)].copy()
@@ -107,17 +113,35 @@ industries = sorted(
     x for x in universe["industry_category"].dropna().astype(str).unique()
     if x.strip()
 )
-selected_industry = st.selectbox(
-    "篩選產業",
-    ["全部產業"] + industries,
-)
+
+industry_col, confirm_col = st.columns(2)
+with industry_col:
+    selected_industry = st.selectbox(
+        "產業",
+        ["全部產業"] + industries,
+    )
+with confirm_col:
+    confirm_n = st.slider(
+        "第二階段完整確認檔數",
+        min_value=10,
+        max_value=60,
+        value=25,
+        step=5,
+        help="只有第二階段才會抓個別基本面與 FinMind 月營收。",
+    )
+
 if selected_industry != "全部產業":
     universe = universe[
         universe["industry_category"].astype(str) == selected_industry
     ].copy()
 
-# Deterministic spread across the universe when using a scan cap,
-# rather than taking only the lowest stock IDs.
+status_filter = st.multiselect(
+    "結果顯示",
+    ["今日新進", "持續低風險", "首次確認"],
+    default=["今日新進", "持續低風險", "首次確認"],
+    help="這個選項只影響結果顯示，不改變掃描本身。",
+)
+
 choice_to_n = {
     "100（快速測試）": 100,
     "300（建議先用）": 300,
@@ -125,6 +149,8 @@ choice_to_n = {
     "全部": None,
 }
 cap = choice_to_n[max_choice]
+
+# Deterministic spread across the universe for capped test modes.
 if cap is not None and len(universe) > cap:
     positions = np.linspace(0, len(universe) - 1, cap, dtype=int)
     scan_universe = universe.iloc[positions].drop_duplicates("stock_id").copy()
@@ -133,12 +159,20 @@ else:
 
 c1, c2, c3 = st.columns(3)
 c1.metric("目前股票池", f"{len(universe):,}")
-c2.metric("本次第一階段", f"{len(scan_universe):,}")
+c2.metric("第一階段掃描", f"{len(scan_universe):,}")
 c3.metric("完整確認上限", f"{confirm_n}")
 
+if max_choice != "全部":
+    st.warning(
+        f"目前是「{max_choice}」測試模式，不是全市場完整掃描。"
+        "如果要找出整個上市櫃市場的候選，請改選「全部」。"
+    )
+else:
+    st.info("目前為全市場第一階段掃描；執行時間會比測試模式長。")
+
 st.caption(
-    "若選「全部」，Yahoo Finance 需要分批下載大量行情，可能花數分鐘。"
-    "300 檔模式是測試用的均勻抽樣，不代表全市場完整結果。"
+    "第一階段：Yahoo Finance 批次行情做寬鬆技術初篩。"
+    "第二階段：才用完整 V4.10/V4.12 模型確認真正低風險區。"
 )
 
 run = st.button(
@@ -225,14 +259,19 @@ if isinstance(current, pd.DataFrame) and not current.empty:
     st.markdown("---")
     st.subheader("今日完整確認結果")
 
-    only_new = st.toggle("只看「今日新進」", value=False)
-
     low = current[current["is_low_risk"]].copy()
-    if only_new:
-        low = low[low["daily_status"] == "🆕 今日新進"].copy()
+
+    status_map = {
+        "今日新進": "🆕 今日新進",
+        "持續低風險": "🟢 持續低風險",
+        "首次確認": "✨ 首次確認",
+    }
+    allowed_status = {status_map[x] for x in status_filter if x in status_map}
+    if allowed_status:
+        low = low[low["daily_status"].isin(allowed_status)].copy()
 
     if low.empty:
-        st.warning("目前這次完整確認中，沒有符合篩選條件的低風險股票。")
+        st.warning("這次完整確認沒有符合目前『結果顯示』條件的低風險股票；可放寬顯示條件或提高完整確認檔數。")
     else:
         low["低風險區"] = low.apply(
             lambda r: f"{r['safe_low']:.2f}～{r['safe_high']:.2f}", axis=1
