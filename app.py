@@ -13,6 +13,9 @@ import plotly.graph_objects as go
 import requests
 import streamlit as st
 import yfinance as yf
+from navigation import show_navigation
+
+st.set_page_config(page_title="軋軋台股決策助手 V4.13", page_icon="🐾", layout="wide")
 
 st.markdown(
     """
@@ -980,8 +983,8 @@ def price_chart(df, zones):
 
     lo, hi = zones["較安全分批區"]
     _, hi2 = zones["中性觀察區"]
-    fig.add_hrect(y0=lo, y1=hi, opacity=0.08, line_width=0, annotation_text="較安全分批區")
-    fig.add_hrect(y0=hi, y1=hi2, opacity=0.04, line_width=0, annotation_text="中性觀察區")
+    fig.add_hrect(y0=lo, y1=hi, fillcolor="#22c55e", opacity=0.22, line_width=0, annotation_text="低風險承接區")
+    fig.add_hrect(y0=hi, y1=hi2, fillcolor="#eab308", opacity=0.20, line_width=0, annotation_text="中風險觀察區")
 
     fig.update_layout(
         height=580,
@@ -1013,14 +1016,10 @@ def revenue_chart(revf):
 # UI
 # =========================================================
 
-st.title("🐾 軋軋個股分析 V4.12")
+st.title("🐾 軋軋個股分析 V4.13")
 st.caption("手機優先：軋軋情境判讀＋MA13 / MA40 / MA63 / MA150 / MA1000 技術架構。")
 
-st.page_link(
-    "pages/2_每日低風險清單.py",
-    label="📋 開啟「每日軋軋低風險清單」",
-    use_container_width=True,
-)
+show_navigation()
 
 with st.sidebar:
     st.header("資料設定")
@@ -1167,7 +1166,7 @@ if analyze:
         st.subheader("🌊 風險河流圖")
         st.caption(
             "K 線＋MA13 / MA40 / MA63 / MA150 / MA1000；"
-            "綠色帶為低風險承接區，另一層為中風險觀察區。"
+            "綠色帶為低風險承接區，黃色帶為中風險觀察區；風險帶為本次分析的價格區間，並非歷史每日重算。"
         )
         st.plotly_chart(
             price_chart(tech_df, decision.zones),

@@ -5,6 +5,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import streamlit as st
+from navigation import show_navigation
+
+st.set_page_config(page_title="每日低風險清單｜軋軋 V4.13", page_icon="📋", layout="wide")
 
 from gaga_scanner import (
     add_transition_labels,
@@ -20,11 +23,7 @@ APP_DIR = Path(__file__).resolve().parents[1]
 
 st.title("📋 每日軋軋低風險清單")
 
-st.page_link(
-    "app.py",
-    label="🐾 回到「軋軋個股分析」",
-    use_container_width=True,
-)
+show_navigation()
 
 st.caption(
     "兩階段掃描：先用 Yahoo Finance 做技術初篩，再只對候選股跑完整 V4.10 "
@@ -32,7 +31,7 @@ st.caption(
 )
 
 st.info(
-    "這一頁是 V4.11 試行版。第一次掃描只能標記「首次確認」；"
+    "每日清單保留兩階段掃描。第一次掃描只能標記「首次確認」；"
     "從第二個不同交易日開始，才會出現真正的「🆕 今日新進低風險區」。"
 )
 
