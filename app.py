@@ -15,7 +15,7 @@ import streamlit as st
 import yfinance as yf
 from navigation import show_navigation
 
-st.set_page_config(page_title="軋軋台股決策助手 V4.13", page_icon="🐾", layout="wide")
+st.set_page_config(page_title="軋軋台股決策助手 V4.14", page_icon="🐾", layout="wide")
 
 st.markdown(
     """
@@ -1016,7 +1016,7 @@ def revenue_chart(revf):
 # UI
 # =========================================================
 
-st.title("🐾 軋軋個股分析 V4.13")
+st.title("🐾 軋軋個股分析 V4.14")
 st.caption("手機優先：軋軋情境判讀＋MA13 / MA40 / MA63 / MA150 / MA1000 技術架構。")
 
 show_navigation()
@@ -1251,3 +1251,7 @@ if analyze:
     except Exception as e:
         st.error(f"分析失敗：{e}")
         st.caption("免費資料來源偶爾會限流，可稍後重試。")
+
+# Market-wide financing monitor belongs below the individual-stock analysis.
+from margin_monitor.view import render_margin_monitor
+render_margin_monitor()

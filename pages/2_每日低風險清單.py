@@ -7,7 +7,7 @@ import pandas as pd
 import streamlit as st
 from navigation import show_navigation
 
-st.set_page_config(page_title="每日低風險清單｜軋軋 V4.13", page_icon="📋", layout="wide")
+st.set_page_config(page_title="每日低風險清單｜軋軋 V4.14", page_icon="📋", layout="wide")
 
 from gaga_scanner import (
     add_transition_labels,
